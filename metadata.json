@@ -1,0 +1,6 @@
+{
+  "name": "Interactive Lathe Machine",
+  "description": "An interactive 3D lathe machine simulator and anatomy inspector built using React and Three.js.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
