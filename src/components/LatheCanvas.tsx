@@ -278,18 +278,22 @@ export default function LatheCanvas({
       const ctx = new AudioCtx();
       audioCtxRef.current = ctx;
 
+      // Resume context immediately — browsers may auto-suspend before user interaction
+      if (ctx.state === 'suspended') ctx.resume();
+
       // 1. Spindle Motor Hum (Oscillator)
+      // Frequency range 90–290 Hz is audible on laptop speakers (old 35–80 Hz was sub-bass)
       const motorOsc = ctx.createOscillator();
       motorOsc.type = 'sawtooth';
-      motorOsc.frequency.value = 35 + (rpm / 2200) * 45;
+      motorOsc.frequency.value = 90 + (rpm / 2200) * 200;
 
       const motorGain = ctx.createGain();
-      motorGain.gain.value = spindleRunning ? 0.06 : 0.0;
+      motorGain.gain.value = spindleRunning ? 0.18 : 0.0;
 
-      // Filter to make it a deep, heavy industrial machine hum
+      // Lowpass at 600 Hz — keeps the industrial growl without excessive highs
       const motorFilter = ctx.createBiquadFilter();
       motorFilter.type = 'lowpass';
-      motorFilter.frequency.value = 180;
+      motorFilter.frequency.value = 600;
 
       motorOsc.connect(motorFilter);
       motorFilter.connect(motorGain);
@@ -313,8 +317,8 @@ export default function LatheCanvas({
 
       const filter = ctx.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.frequency.value = 1400;
-      filter.Q.value = 2.2;
+      filter.frequency.value = 800; // Lower centre = more body, louder on most speakers
+      filter.Q.value = 1.5;
 
       const cutGain = ctx.createGain();
       cutGain.gain.value = 0;
@@ -329,7 +333,7 @@ export default function LatheCanvas({
 
       // 3. Ambient Machine Shop Background Sound (HVAC, ventilation rumble, sub line hum)
       const ambGain = ctx.createGain();
-      ambGain.gain.value = (mode === 'operate') ? 0.035 : 0.0;
+      ambGain.gain.value = (mode === 'operate') ? 0.07 : 0.0;
 
       // Pink noise room rumble synthesis
       const ambBufferSize = ctx.sampleRate * 3;
@@ -354,7 +358,7 @@ export default function LatheCanvas({
 
       const ambFilter = ctx.createBiquadFilter();
       ambFilter.type = 'lowpass';
-      ambFilter.frequency.value = 220; // Deep reverberant shop floor cutoff
+      ambFilter.frequency.value = 500; // Raised to allow more audible mid rumble
 
       // 60Hz transformer line hum
       const humOsc = ctx.createOscillator();
@@ -401,7 +405,7 @@ export default function LatheCanvas({
   useEffect(() => {
     if (audioEnabled && audioCtxRef.current && ambientGainRef.current) {
       const now = audioCtxRef.current.currentTime;
-      const targetGain = (mode === 'operate') ? 0.035 : 0.0;
+      const targetGain = (mode === 'operate') ? 0.07 : 0.0;
       ambientGainRef.current.gain.setTargetAtTime(targetGain, now, 0.15);
     }
   }, [mode, audioEnabled]);
@@ -412,12 +416,12 @@ export default function LatheCanvas({
       const now = audioCtxRef.current.currentTime;
 
       if (motorGainRef.current) {
-        const targetGain = spindleRunning ? 0.06 : 0.0;
+        const targetGain = spindleRunning ? 0.18 : 0.0;
         motorGainRef.current.gain.setTargetAtTime(targetGain, now, 0.08);
       }
 
       if (motorNodeRef.current) {
-        const targetFreq = 35 + (rpm / 2200) * 45;
+        const targetFreq = 90 + (rpm / 2200) * 200;
         motorNodeRef.current.frequency.setTargetAtTime(targetFreq, now, 0.08);
       }
     }
@@ -881,13 +885,14 @@ export default function LatheCanvas({
 
     // Animation frames loop
     let animationFrameId: number;
-    const clock = new THREE.Clock();
+    let lastFrameTime = performance.now();
 
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
 
-      const delta = clock.getDelta();
       const now = performance.now();
+      const delta = (now - lastFrameTime) / 1000; // seconds, matching THREE.Clock.getDelta()
+      lastFrameTime = now;
 
       // Read stable parameters from refs for butter smooth 60fps
       const currentMode = propsRef.current.mode;
@@ -1163,7 +1168,7 @@ export default function LatheCanvas({
 
       // Active cutting audio volume scaling
       if (audioEnabledRef.current && cuttingGainRef.current && audioCtxRef.current) {
-        const speedMultiplier = 0.05 + (currentRpm / 2200) * 0.12;
+        const speedMultiplier = 0.18 + (currentRpm / 2200) * 0.35;
         cuttingGainRef.current.gain.setTargetAtTime(
           frameIsCutting ? speedMultiplier : 0,
           audioCtxRef.current.currentTime,

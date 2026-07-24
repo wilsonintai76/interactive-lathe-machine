@@ -12,7 +12,7 @@ export default function App() {
   const [brakeEngaged, setBrakeEngaged] = useState(false);
   const [rpm, setRpm] = useState(750);
   const [material, setMaterial] = useState<WorkpieceMaterial>('castiron');
-  const [toolPos, setToolPos] = useState<ToolPosition>({ x: 15.0, z: 40.0 });
+  const [toolPos, setToolPos] = useState<ToolPosition>({ x: 16.0, z: 40.0 });
   const [selectedPartKey, setSelectedPartKey] = useState('workpiece');
   const [audioEnabled, setAudioEnabled] = useState(false);
 
@@ -65,7 +65,7 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans relative">
+    <div className="h-full w-full flex flex-col bg-slate-950 text-slate-100 overflow-hidden font-sans relative">
       {/* Background Mesh Gradients */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-45">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600 rounded-full blur-[120px]"></div>

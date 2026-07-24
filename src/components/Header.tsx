@@ -25,10 +25,10 @@ export default function Header({
         </div>
         <div>
           <h1 id="app-title" className="text-xs sm:text-sm font-bold tracking-tight text-white uppercase">
-            LATHE-X <span className="text-blue-400 font-light hidden sm:inline">INTERACTIVE v2.5</span>
+            LATHE SIMULATOR <span className="text-blue-400 font-light hidden sm:inline">3D</span>
           </h1>
           <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase tracking-widest font-mono hidden sm:block">
-            Anatomy & Machining Station
+            Interactive Anatomy & Machining Station
           </p>
         </div>
       </div>
