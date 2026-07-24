@@ -11,7 +11,7 @@ export default function App() {
   const [spindleRunning, setSpindleRunning] = useState(false);
   const [brakeEngaged, setBrakeEngaged] = useState(false);
   const [rpm, setRpm] = useState(750);
-  const [material, setMaterial] = useState<WorkpieceMaterial>('brass');
+  const [material, setMaterial] = useState<WorkpieceMaterial>('castiron');
   const [toolPos, setToolPos] = useState<ToolPosition>({ x: 15.0, z: 40.0 });
   const [selectedPartKey, setSelectedPartKey] = useState('workpiece');
   const [audioEnabled, setAudioEnabled] = useState(false);

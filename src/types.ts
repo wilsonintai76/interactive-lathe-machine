@@ -1,6 +1,6 @@
 export type AppMode = 'inspect' | 'operate';
 
-export type WorkpieceMaterial = 'brass' | 'aluminum' | 'steel';
+export type WorkpieceMaterial = 'castiron';
 
 export interface ToolPosition {
   x: number; // Diameter in mm (e.g., 12.0 to 32.0, default 30.0)

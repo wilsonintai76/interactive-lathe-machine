@@ -4,6 +4,8 @@ export interface LatheMaterials {
   brass: THREE.MeshStandardMaterial;
   aluminum: THREE.MeshStandardMaterial;
   steel: THREE.MeshStandardMaterial;
+  castiron: THREE.MeshStandardMaterial;
+  workpieceMat: THREE.MeshStandardMaterial;
   paint: THREE.MeshStandardMaterial;
   darkIron: THREE.MeshStandardMaterial;
   brightSteel: THREE.MeshStandardMaterial;
@@ -32,6 +34,18 @@ export function createMaterials(): LatheMaterials {
       color: 0xc0cdf0, // High-visibility steel
       roughness: 0.18,
       metalness: 0.90,
+    }),
+    castiron: new THREE.MeshStandardMaterial({
+      color: 0x334155, // Dark raw cast iron
+      roughness: 0.45,
+      metalness: 0.70,
+    }),
+    workpieceMat: new THREE.MeshStandardMaterial({
+      color: 0xffffff, // Uses vertex colors for uncut raw skin vs bright turned silver cut core
+      roughness: 0.25,
+      metalness: 0.85,
+      vertexColors: true,
+      side: THREE.DoubleSide,
     }),
     paint: new THREE.MeshStandardMaterial({
       color: 0x334155, // Clean slate teal industrial paint

@@ -155,32 +155,23 @@ export default function MachiningSimulator({
         </div>
 
         {/* Workpiece Metal Material */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2.5 shadow-sm">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-            Workpiece Alloy
-          </span>
-          <div className="grid grid-cols-3 gap-1.5">
-            {[
-              { id: 'brass', name: 'Brass', style: 'border-amber-500/40 bg-amber-500/20 text-amber-300 shadow-sm shadow-amber-500/10' },
-              { id: 'aluminum', name: 'Aluminum', style: 'border-white/20 bg-white/15 text-slate-200 shadow-sm shadow-white/5' },
-              { id: 'steel', name: 'Steel', style: 'border-blue-400/40 bg-blue-400/20 text-blue-300 shadow-sm shadow-blue-400/10' },
-            ].map((mat) => {
-              const active = material === mat.id;
-              return (
-                <button
-                  key={mat.id}
-                  id={`btn-mat-${mat.id}`}
-                  onClick={() => setMaterial(mat.id as WorkpieceMaterial)}
-                  className={`py-2 px-1 text-xs font-bold rounded-xl border text-center transition cursor-pointer ${
-                    active
-                      ? `${mat.style} border-2`
-                      : 'border-white/5 bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10'
-                  }`}
-                >
-                  {mat.name}
-                </button>
-              );
-            })}
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-2 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              Workpiece Alloy
+            </span>
+            <span className="text-[10px] font-mono text-cyan-400 font-semibold bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full">
+              Grey Cast Iron
+            </span>
+          </div>
+          <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-3.5 h-3.5 rounded-full bg-slate-600 border border-slate-400/50 shadow-inner" />
+              <div>
+                <p className="font-bold text-slate-200">ASTM Class 35 Cast Iron</p>
+                <p className="text-[10px] text-slate-400">Dark sand-cast outer skin • Turns to bright silver metal</p>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -1,10 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { Eye, EyeOff } from 'lucide-react';
 import { ToolPosition, WorkpieceMaterial, AppMode } from '../types';
 import { ANATOMY_PARTS } from '../data/anatomy';
 import { createMaterials, LatheMaterials } from './LatheMaterials';
 import { buildLatheScene } from './LatheModelBuilder';
+import { createWorkpieceGeometry } from './lathe/Workpiece3D';
+
+const PART_SHORT_CODES: Record<string, string> = {
+  workpiece: 'CK',
+  headstock: 'HS',
+  toolpost: 'TP',
+  compoundrest: 'CR',
+  crossslide: 'CS',
+  carriage: 'CA',
+  bedways: 'BD',
+  tailstock: 'TS',
+  footbrake: 'FB',
+};
 
 interface LatheCanvasProps {
   mode: AppMode;
@@ -23,6 +37,13 @@ interface LatheCanvasProps {
 }
 
 const SEGMENT_COUNT = 60; // Resolution of workpiece cutting slices
+
+const WORKPIECE_MATERIAL_COLORS: Record<WorkpieceMaterial, { raw: THREE.Color; cut: THREE.Color }> = {
+  castiron: {
+    raw: new THREE.Color(0x283240), // Sand-cast dark iron raw skin
+    cut: new THREE.Color(0xe2e8f0), // Freshly turned bright shiny silver iron core
+  },
+};
 
 export default function LatheCanvas({
   mode,
@@ -72,6 +93,12 @@ export default function LatheCanvas({
   const smokeVelocities = useRef<THREE.Vector3[]>([]);
   const smokeAges = useRef<number[]>([]);
 
+  // Metallic Chip Debris Particle System
+  const chipParticlesRef = useRef<THREE.Points | null>(null);
+  const chipVelocities = useRef<THREE.Vector3[]>([]);
+  const chipAges = useRef<number[]>([]);
+  const chipSettled = useRef<boolean[]>([]);
+
   // Visual Cut Trail / Cut Line state and refs
   const MAX_TRAIL_VERTICES = 24000; // Stores up to 12,000 cut line segments
   const cutTrailMeshRef = useRef<THREE.LineSegments | null>(null);
@@ -98,6 +125,11 @@ export default function LatheCanvas({
 
   // Track currently hovered interactive 3D components to highlight them
   const hoveredPartRef = useRef<string | null>(null);
+
+  // 3D Hotspot overlay state & screen projection coordinates
+  const [showHotspots, setShowHotspots] = useState(true);
+  const [hotspotCoords, setHotspotCoords] = useState<Record<string, { x: number; y: number; visible: boolean }>>({});
+  const lastHotspotUpdateRef = useRef<number>(0);
 
   // Deformable geometry state
   // Workpiece coordinates in mm: spans from Z = 10 to Z = 60 (50mm length).
@@ -175,36 +207,14 @@ export default function LatheCanvas({
     };
   }, []);
 
-  // Update workpiece geometry from radii ref
+  // Update workpiece geometry from radii ref using Workpiece3D component builder
   const rebuildWorkpieceGeometry = () => {
     if (!workpieceMeshRef.current || !materialsRef.current) return;
 
-    // Build the lathe profile points (Vector2 coordinates: X is radius, Y is position along spindle length)
-    // Scale: 7.5mm radius maps to 0.075 units. So 1mm = 0.01 units.
-    const points: THREE.Vector2[] = [];
+    const currentMatKey = propsRef.current ? propsRef.current.material : material;
+    const newGeom = createWorkpieceGeometry(workpieceRadii.current, currentMatKey);
 
-    // Let's create a beautiful profile from left to right.
-    // Left starts at chuck side.
-    const mmPerSegment = 50.0 / (SEGMENT_COUNT - 1);
-
-    for (let i = 0; i < SEGMENT_COUNT; i++) {
-      const radiusMm = workpieceRadii.current[i];
-      const radiusUnits = radiusMm * 0.01;
-      const lengthUnits = i * mmPerSegment * 0.01 + 0.08; // Offset of 0.08 from chuck face (chuck thickness is 0.16)
-
-      points.push(new THREE.Vector2(radiusUnits, lengthUnits));
-    }
-
-    // Build new LatheGeometry
-    // We specify 32 radial segments for a clean, round cylinder
-    const newGeom = new THREE.LatheGeometry(points, 32);
-
-    // LatheGeometry revolves around the Y axis and goes from Y = 0 to Y = length.
-    // We want the workpiece aligned with the X axis (spindle line).
-    // Let's rotate the geometry so it lies along the positive X axis.
-    newGeom.rotateZ(-Math.PI / 2);
-
-    // Replace geometry
+    // Replace geometry cleanly
     const oldGeom = workpieceMeshRef.current.geometry;
     workpieceMeshRef.current.geometry = newGeom;
     oldGeom.dispose();
@@ -241,11 +251,7 @@ export default function LatheCanvas({
 
   // Sync material look
   useEffect(() => {
-    if (!workpieceMeshRef.current || !materialsRef.current) return;
-    let mat = materialsRef.current.brass;
-    if (material === 'aluminum') mat = materialsRef.current.aluminum;
-    if (material === 'steel') mat = materialsRef.current.steel;
-    workpieceMeshRef.current.material = mat;
+    rebuildWorkpieceGeometry();
   }, [material]);
 
   // Sync mode and camera focus
@@ -546,6 +552,40 @@ export default function LatheCanvas({
     const smokeParticles = new THREE.Points(smokeGeom, smokeMat);
     smokeParticlesRef.current = smokeParticles;
     scene.add(smokeParticles);
+
+    // System C: Physical Metallic Chip Debris Particle System
+    const chipCount = 180;
+    const chipGeom = new THREE.BufferGeometry();
+    const chipPositions = new Float32Array(chipCount * 3);
+    const chipColors = new Float32Array(chipCount * 3);
+
+    for (let i = 0; i < chipCount; i++) {
+      chipPositions[i * 3] = 0;
+      chipPositions[i * 3 + 1] = -100; // Off-screen initially
+      chipPositions[i * 3 + 2] = 0;
+
+      chipColors[i * 3] = 0.85;
+      chipColors[i * 3 + 1] = 0.88;
+      chipColors[i * 3 + 2] = 0.95;
+
+      chipVelocities.current.push(new THREE.Vector3());
+      chipAges.current.push(0);
+      chipSettled.current.push(false);
+    }
+
+    chipGeom.setAttribute('position', new THREE.BufferAttribute(chipPositions, 3));
+    chipGeom.setAttribute('color', new THREE.BufferAttribute(chipColors, 3));
+
+    const chipMat = new THREE.PointsMaterial({
+      size: 0.026,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.NormalBlending, // Solid metallic look
+    });
+    const chipParticles = new THREE.Points(chipGeom, chipMat);
+    chipParticlesRef.current = chipParticles;
+    scene.add(chipParticles);
 
     // Ground Grid Helper for context
     const gridHelper = new THREE.GridHelper(8, 20, 0x334155, 0x1e293b);
@@ -923,14 +963,7 @@ export default function LatheCanvas({
                     posArray[(vIdx + 1) * 3 + 1] = currentLocalPoint.y;
                     posArray[(vIdx + 1) * 3 + 2] = currentLocalPoint.z;
 
-                    let r = 0.0, g = 0.95, b = 1.0;
-                    if (currentMaterial === 'brass') {
-                      r = 0.0; g = 0.95; b = 0.85;
-                    } else if (currentMaterial === 'aluminum') {
-                      r = 0.1; g = 0.82; b = 1.0;
-                    } else {
-                      r = 1.0; g = 0.55; b = 0.12;
-                    }
+                    const r = 0.1, g = 0.92, b = 0.98;
 
                     colArray[vIdx * 3] = r;
                     colArray[vIdx * 3 + 1] = g;
@@ -970,37 +1003,17 @@ export default function LatheCanvas({
                 positions[pIdx * 3 + 1] = toolTipY + (Math.random() - 0.5) * 0.015;
                 positions[pIdx * 3 + 2] = toolTipZ + (Math.random() - 0.5) * 0.015;
 
-                let vx = (Math.random() - 0.35) * 0.03;
-                let vy = Math.random() * 0.025 + 0.015;
-                let vz = Math.random() * 0.05 + 0.015; // thrown towards positive Z (backwards)
-
-                if (currentMaterial === 'steel') {
-                  vx = (Math.random() - 0.3) * 0.04;
-                  vy = Math.random() * 0.035 + 0.02;
-                  vz = Math.random() * 0.08 + 0.02;
-                } else if (currentMaterial === 'aluminum') {
-                  vx = (Math.random() - 0.4) * 0.015;
-                  vy = Math.random() * 0.012 + 0.01;
-                  vz = Math.random() * 0.03 + 0.01;
-                }
+                const vx = (Math.random() - 0.35) * 0.03;
+                const vy = Math.random() * 0.025 + 0.015;
+                const vz = Math.random() * 0.05 + 0.015; // thrown towards positive Z (backwards)
 
                 particleVelocities.current[pIdx].set(vx, vy, vz);
                 particleAges.current[pIdx] = 1.0;
 
-                // Color synthesis
-                if (currentMaterial === 'brass') {
-                  colors[pIdx * 3] = 0.95;     // R
-                  colors[pIdx * 3 + 1] = 0.70; // G
-                  colors[pIdx * 3 + 2] = 0.15; // B
-                } else if (currentMaterial === 'aluminum') {
-                  colors[pIdx * 3] = 0.90;     // R
-                  colors[pIdx * 3 + 1] = 0.92; // G
-                  colors[pIdx * 3 + 2] = 0.98; // B
-                } else {
-                  colors[pIdx * 3] = 1.0;      // R (Orange-hot glow)
-                  colors[pIdx * 3 + 1] = 0.38; // G
-                  colors[pIdx * 3 + 2] = 0.06; // B
-                }
+                // Color synthesis (Bright silver iron chips)
+                colors[pIdx * 3] = 0.88;     // R
+                colors[pIdx * 3 + 1] = 0.92; // G
+                colors[pIdx * 3 + 2] = 0.98; // B
               }
             }
 
@@ -1023,6 +1036,41 @@ export default function LatheCanvas({
                   (Math.random() - 0.5) * 0.006
                 );
                 smokeAges.current[sIdx] = 1.0;
+              }
+            }
+
+            // Emit physical metallic chip debris swarf
+            if (chipParticlesRef.current) {
+              const positions = chipParticlesRef.current.geometry.attributes.position.array as Float32Array;
+              const colors = chipParticlesRef.current.geometry.attributes.color.array as Float32Array;
+
+              const toolTipX = carriageRef.current.position.x - 0.03;
+              const toolTipY = 0.86;
+              const toolTipZ = -0.10;
+
+              const chipsToEmit = Math.floor(Math.random() * 3) + 2;
+              for (let c = 0; c < chipsToEmit; c++) {
+                let cIdx = chipAges.current.findIndex((age) => age <= 0);
+                if (cIdx === -1) {
+                  cIdx = Math.floor(Math.random() * 180);
+                }
+
+                positions[cIdx * 3] = toolTipX + (Math.random() - 0.5) * 0.015;
+                positions[cIdx * 3 + 1] = toolTipY + (Math.random() - 0.5) * 0.015;
+                positions[cIdx * 3 + 2] = toolTipZ + (Math.random() - 0.5) * 0.015;
+
+                const vx = (Math.random() - 0.5) * 0.028;
+                const vy = Math.random() * 0.025 + 0.012;
+                const vz = Math.random() * 0.035 + 0.015;
+
+                chipVelocities.current[cIdx].set(vx, vy, vz);
+                chipAges.current[cIdx] = 1.0;
+                chipSettled.current[cIdx] = false;
+
+                // Bright metallic silver cast iron swarf chips
+                colors[cIdx * 3] = 0.75 + Math.random() * 0.20;
+                colors[cIdx * 3 + 1] = 0.80 + Math.random() * 0.18;
+                colors[cIdx * 3 + 2] = 0.90 + Math.random() * 0.10;
               }
             }
           } else {
@@ -1097,6 +1145,49 @@ export default function LatheCanvas({
         smokeParticlesRef.current.geometry.attributes.position.needsUpdate = true;
       }
 
+      // Update Physical Metallic Chip Debris Physics
+      if (chipParticlesRef.current) {
+        const positions = chipParticlesRef.current.geometry.attributes.position.array as Float32Array;
+        for (let i = 0; i < 180; i++) {
+          if (chipAges.current[i] > 0) {
+            if (!chipSettled.current[i]) {
+              positions[i * 3] += chipVelocities.current[i].x;
+              positions[i * 3 + 1] += chipVelocities.current[i].y;
+              positions[i * 3 + 2] += chipVelocities.current[i].z;
+
+              // Apply gravity
+              chipVelocities.current[i].y -= 0.0022;
+
+              // Apply air drag resistance
+              chipVelocities.current[i].x *= 0.985;
+              chipVelocities.current[i].z *= 0.985;
+
+              // Settle on lathe bed chip tray floor (y ≈ 0.14)
+              if (positions[i * 3 + 1] <= 0.14) {
+                if (chipVelocities.current[i].y < -0.012) {
+                  // Metallic bounce
+                  chipVelocities.current[i].y = -chipVelocities.current[i].y * 0.28;
+                  chipVelocities.current[i].x *= 0.6;
+                  chipVelocities.current[i].z *= 0.6;
+                } else {
+                  positions[i * 3 + 1] = 0.14;
+                  chipSettled.current[i] = true;
+                }
+              }
+            } else {
+              // Settled chip resting on bed tray accumulates and slowly fades out
+              chipAges.current[i] -= delta * 0.35;
+              if (chipAges.current[i] <= 0) {
+                chipAges.current[i] = 0;
+                positions[i * 3 + 1] = -100;
+              }
+            }
+          }
+        }
+        chipParticlesRef.current.geometry.attributes.position.needsUpdate = true;
+        chipParticlesRef.current.geometry.attributes.color.needsUpdate = true;
+      }
+
       // 7. Dynamic Camera smooth tracking transitions
       if (cameraTransitionRef.current.active) {
         const elapsed = now - cameraTransitionRef.current.startTime;
@@ -1117,6 +1208,83 @@ export default function LatheCanvas({
         if (progress >= 1) {
           cameraTransitionRef.current.active = false;
         }
+      }
+
+      // 8. Calculate 3D Hotspot screen projections using real-time mesh world positions
+      if (now - lastHotspotUpdateRef.current > 30 && containerRef.current && sceneRef.current) {
+        lastHotspotUpdateRef.current = now;
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+        const projVec = new THREE.Vector3();
+        const worldPos = new THREE.Vector3();
+        const nextCoords: Record<string, { x: number; y: number; visible: boolean }> = {};
+
+        const partMeshMap: Record<string, THREE.Object3D | null | undefined> = {
+          workpiece: workpieceMesh,
+          headstock: headstock,
+          toolpost: tpBlock,
+          compoundrest: compBody,
+          crossslide: csTable,
+          carriage: saddle,
+          bedways: bedMesh,
+          tailstock: tsCasting,
+          footbrake: sceneRef.current.getObjectByName('footBrakePedal'),
+        };
+
+        Object.entries(ANATOMY_PARTS).forEach(([key, part]) => {
+          const meshObj = partMeshMap[key];
+          if (meshObj) {
+            meshObj.getWorldPosition(worldPos);
+
+            // Apply fine-tuned offsets relative to each component's actual geometric surface
+            if (key === 'workpiece') {
+              worldPos.x += 0.20;
+              worldPos.y += 0.05;
+            } else if (key === 'headstock') {
+              worldPos.x -= 0.05;
+              worldPos.y += 0.12;
+              worldPos.z += 0.25;
+            } else if (key === 'toolpost') {
+              worldPos.y += 0.04;
+            } else if (key === 'compoundrest') {
+              worldPos.y += 0.02;
+              worldPos.z += 0.08;
+            } else if (key === 'crossslide') {
+              worldPos.y += 0.02;
+              worldPos.z += 0.18;
+            } else if (key === 'carriage') {
+              worldPos.x -= 0.12;
+              worldPos.y -= 0.14;
+              worldPos.z += 0.38;
+            } else if (key === 'bedways') {
+              worldPos.set(1.2, 0.61, 0.28);
+            } else if (key === 'tailstock') {
+              worldPos.y += 0.08;
+              worldPos.x += 0.05;
+            } else if (key === 'footbrake') {
+              worldPos.set(0.8, -0.65, 0.52);
+            }
+            projVec.copy(worldPos);
+          } else {
+            projVec.set(part.targetPos.x, part.targetPos.y + 0.1, part.targetPos.z);
+          }
+
+          projVec.project(camera);
+
+          const isBehind = projVec.z > 1.0;
+          const sx = ((projVec.x + 1) * width) / 2;
+          const sy = ((-projVec.y + 1) * height) / 2;
+
+          const inBounds = sx >= 20 && sx <= width - 20 && sy >= 20 && sy <= height - 20;
+
+          nextCoords[key] = {
+            x: sx,
+            y: sy,
+            visible: !isBehind && inBounds
+          };
+        });
+
+        setHotspotCoords(nextCoords);
       }
 
       controls.update();
@@ -1162,26 +1330,113 @@ export default function LatheCanvas({
   }, []); // Rebuild tree ONLY once to preserve camera orientation and enable high-fidelity 60 FPS transitions
 
   return (
-    <div ref={containerRef} className="relative flex-1 w-full h-full bg-slate-950 overflow-hidden">
+    <div ref={containerRef} className="relative flex-1 w-full h-full bg-slate-950 overflow-hidden select-none">
       {/* Three.js Canvas */}
       <canvas
         ref={canvasRef}
         className="w-full h-full block cursor-grab active:cursor-grabbing outline-none"
       />
 
-      {/* Sparks warning for high visual fidelity */}
-      {isCuttingState && (
-        <div className="absolute top-4 left-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md flex items-center gap-2 select-none animate-pulse">
-          <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
-          <span>SHAVING IN PROGRESS</span>
+      {/* Top Left Toolbar Controls */}
+      <div className="absolute top-4 left-4 z-20 flex items-center gap-2 flex-wrap max-w-[calc(100%-18rem)]">
+        {isCuttingState && (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-md flex items-center gap-2 select-none animate-pulse shadow-lg">
+            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+            <span>SHAVING IN PROGRESS</span>
+          </div>
+        )}
+
+        {/* 3D Hotspots Toggle Button */}
+        <button
+          onClick={() => setShowHotspots((prev) => !prev)}
+          className={`px-3 py-1.5 rounded-xl text-xs font-semibold border backdrop-blur-md flex items-center gap-2 transition-all cursor-pointer shadow-lg ${
+            showHotspots
+              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+              : 'bg-slate-900/80 border-slate-700/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'
+          }`}
+        >
+          {showHotspots ? (
+            <>
+              <Eye className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span>3D Hotspots: ON</span>
+            </>
+          ) : (
+            <>
+              <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+              <span>3D Hotspots: OFF</span>
+            </>
+          )}
+        </button>
+
+        {/* Cut Trail Visual Badge */}
+        <div className="bg-slate-900/85 border border-cyan-500/30 text-cyan-300 px-3 py-1.5 rounded-xl text-xs font-mono font-medium backdrop-blur-md flex items-center gap-2 select-none shadow-lg">
+          <span className={`w-2 h-2 rounded-full ${isCuttingState ? 'bg-cyan-400 animate-ping' : trailPassesCount > 0 ? 'bg-cyan-400' : 'bg-slate-600'}`} />
+          <span>CUT TRAIL: {trailPassesCount > 0 ? `${trailPassesCount} SEGMENTS` : 'READY'}</span>
+        </div>
+      </div>
+
+      {/* 3D Projected Hotspot Buttons Layer */}
+      {showHotspots && (
+        <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
+          {Object.entries(ANATOMY_PARTS).map(([key, part]) => {
+            const coords = hotspotCoords[key];
+            if (!coords || !coords.visible) return null;
+
+            const isSelected = key === selectedPartKey;
+            const shortCode = PART_SHORT_CODES[key] || 'PT';
+
+            return (
+              <div
+                key={key}
+                style={{
+                  left: `${coords.x}px`,
+                  top: `${coords.y}px`,
+                }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto transition-transform duration-150"
+              >
+                <button
+                  id={`hotspot-btn-${key}`}
+                  onClick={() => setSelectedPartKey(key)}
+                  className={`group relative flex items-center justify-center rounded-full transition-all duration-300 cursor-pointer ${
+                    isSelected
+                      ? 'w-10 h-10 bg-emerald-500 text-slate-950 font-black ring-4 ring-emerald-400/60 shadow-xl shadow-emerald-500/50 scale-125 z-30'
+                      : 'w-8 h-8 bg-slate-900/90 text-cyan-300 font-bold border border-cyan-400/50 hover:border-emerald-400 hover:text-emerald-300 hover:scale-110 z-20 shadow-md backdrop-blur-md'
+                  }`}
+                  title={part.title}
+                >
+                  {/* Outer Pulsing Ping Ring */}
+                  <span
+                    className={`absolute -inset-2 rounded-full pointer-events-none transition-all ${
+                      isSelected
+                        ? 'bg-emerald-400/40 animate-ping ring-2 ring-emerald-400'
+                        : 'bg-cyan-400/25 group-hover:bg-emerald-400/35 animate-pulse'
+                    }`}
+                  />
+
+                  {/* Inner Short Badge Code */}
+                  <span className="text-[11px] tracking-tight relative z-10 select-none">
+                    {shortCode}
+                  </span>
+
+                  {/* Floating Part Title Tag Badge */}
+                  <div
+                    className={`absolute left-full ml-2.5 px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap backdrop-blur-md border transition-all duration-200 pointer-events-none shadow-xl ${
+                      isSelected
+                        ? 'opacity-100 bg-slate-900/95 border-emerald-500/60 text-emerald-300 translate-x-0'
+                        : 'opacity-0 group-hover:opacity-100 bg-slate-900/90 border-cyan-500/40 text-cyan-200 -translate-x-1'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-emerald-400 animate-ping' : 'bg-cyan-400'}`} />
+                      <span>{part.title}</span>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
-
-      {/* Cut Trail Visual Badge */}
-      <div className="absolute top-4 right-4 bg-slate-900/85 border border-cyan-500/30 text-cyan-300 px-3 py-1.5 rounded-xl text-xs font-mono font-medium backdrop-blur-md flex items-center gap-2 select-none shadow-lg">
-        <span className={`w-2 h-2 rounded-full ${isCuttingState ? 'bg-cyan-400 animate-ping' : trailPassesCount > 0 ? 'bg-cyan-400' : 'bg-slate-600'}`} />
-        <span>CUT TRAIL: {trailPassesCount > 0 ? `${trailPassesCount} SEGMENTS` : 'READY'}</span>
-      </div>
     </div>
   );
 }

@@ -58,8 +58,8 @@ export const ANATOMY_PARTS: Record<string, AnatomyPart> = {
       "Dovetail ways are adjustable via a brass gib strip to eliminate mechanical backlash",
       "Provides flat facing operations across the face of the rotating stock"
     ],
-    cameraPos: { x: 0.2, y: 1.5, z: 1.4 },
-    targetPos: { x: 0.4, y: 0.75, z: 0.3 }
+    cameraPos: { x: 0.2, y: 1.4, z: 1.3 },
+    targetPos: { x: 0.4, y: 0.73, z: 0.20 }
   },
   carriage: {
     title: "Carriage & Rear Apron",
@@ -70,8 +70,8 @@ export const ANATOMY_PARTS: Record<string, AnatomyPart> = {
       "Contains the split-jaw half-nut mechanism that locks onto the lead screw for thread cutting",
       "Integrates safety interlocks to prevent simultaneous manual feed and lead screw engagement"
     ],
-    cameraPos: { x: 0.6, y: 1.4, z: 1.8 },
-    targetPos: { x: 0.4, y: 0.70, z: 0.3 }
+    cameraPos: { x: 0.6, y: 1.3, z: 1.6 },
+    targetPos: { x: 0.4, y: 0.62, z: 0.35 }
   },
   bedways: {
     title: "Lathe Bed & Precision V-Ways",

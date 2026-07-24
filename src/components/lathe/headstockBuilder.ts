@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { LatheMaterials } from '../LatheMaterials';
+import { createWorkpieceMesh, DEFAULT_WORKPIECE_RADIUS_MM, WORKPIECE_SEGMENT_COUNT } from './Workpiece3D';
 
 export interface HeadstockBuildResult {
   headstock: THREE.Mesh;
@@ -10,7 +11,7 @@ export interface HeadstockBuildResult {
 export function buildHeadstock(
   scene: THREE.Scene,
   mats: LatheMaterials,
-  defaultPoints: THREE.Vector2[]
+  _defaultPoints?: THREE.Vector2[]
 ): HeadstockBuildResult {
   // Gearbox & Headstock Main Cabinet
   const headGeom = new THREE.BoxGeometry(0.76, 0.96, 0.80);
@@ -103,10 +104,9 @@ export function buildHeadstock(
 
   spindleGroup.add(chuckBodyGroup);
 
-  // Workpiece Mesh
-  const initialLatheGeom = new THREE.LatheGeometry(defaultPoints, 32);
-  initialLatheGeom.rotateZ(-Math.PI / 2);
-  const workpieceMesh = new THREE.Mesh(initialLatheGeom, mats.brass);
+  // Workpiece Mesh (Solid Closed Cylinder)
+  const initialRadii = new Array(WORKPIECE_SEGMENT_COUNT).fill(DEFAULT_WORKPIECE_RADIUS_MM);
+  const workpieceMesh = createWorkpieceMesh(initialRadii, mats.workpieceMat, 'castiron');
   spindleGroup.add(workpieceMesh);
 
   scene.add(spindleGroup);
