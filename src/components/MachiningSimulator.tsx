@@ -1,6 +1,7 @@
 import { WorkpieceMaterial, ToolPosition } from '../types';
 import { Play, Square, Hammer, ChevronLeft, ChevronRight, RotateCcw, Award, AlertCircle } from 'lucide-react';
-import { useRef } from 'react';
+import { useRef, TouchEvent } from 'react';
+import Tooltip from './Tooltip';
 
 interface MachiningSimulatorProps {
   spindleRunning: boolean;
@@ -55,6 +56,16 @@ export default function MachiningSimulator({
     stopJog();
   };
 
+  const handleTouchStart = (e: TouchEvent, axis: 'x' | 'z', delta: number) => {
+    e.preventDefault();
+    handlePressStart(axis, delta);
+  };
+
+  const handleTouchEnd = (e: TouchEvent) => {
+    e.preventDefault();
+    handlePressEnd();
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Description Panel */}
@@ -94,41 +105,45 @@ export default function MachiningSimulator({
 
           <div className="grid grid-cols-1 gap-2">
             {/* Spindle Motor Toggle Button */}
-            <button
-              id="btn-spindle-toggle"
-              onClick={toggleSpindle}
-              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs shadow-lg transition duration-150 flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.98] ${
-                spindleRunning
-                  ? 'bg-red-500/25 hover:bg-red-500/35 text-red-300 border border-red-500/30 shadow-red-500/10'
-                  : 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/30 shadow-emerald-500/10'
-              }`}
-            >
-              {spindleRunning ? (
-                <>
-                  <Square className="w-4 h-4 fill-current" />
-                  STOP SPINDLE MOTOR
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 fill-current" />
-                  START SPINDLE MOTOR
-                </>
-              )}
-            </button>
+            <Tooltip content={spindleRunning ? "Power down 3-phase induction motor and stop headstock rotation" : "Engage 3-phase spindle motor to rotate raw stock at set RPM"} position="top" className="w-full">
+              <button
+                id="btn-spindle-toggle"
+                onClick={toggleSpindle}
+                className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs shadow-lg transition duration-150 flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.98] ${
+                  spindleRunning
+                    ? 'bg-red-500/25 hover:bg-red-500/35 text-red-300 border border-red-500/30 shadow-red-500/10'
+                    : 'bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/30 shadow-emerald-500/10'
+                }`}
+              >
+                {spindleRunning ? (
+                  <>
+                    <Square className="w-4 h-4 fill-current" />
+                    STOP SPINDLE MOTOR
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-current" />
+                    START SPINDLE MOTOR
+                  </>
+                )}
+              </button>
+            </Tooltip>
 
             {/* Spindle Brake Toggle Button */}
-            <button
-              id="btn-brake-toggle"
-              onClick={toggleBrake}
-              className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs shadow-md transition duration-150 flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.98] ${
-                brakeEngaged
-                  ? 'bg-amber-500/30 hover:bg-amber-500/40 text-amber-300 border border-amber-500/50 shadow-amber-500/20'
-                  : 'bg-slate-800/80 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-white/10 hover:border-amber-500/30'
-              }`}
-            >
-              <AlertCircle className={`w-4 h-4 ${brakeEngaged ? 'text-amber-400' : 'text-slate-400'}`} />
-              {brakeEngaged ? 'RELEASE SPINDLE BRAKE' : 'ENGAGE SPINDLE BRAKE'}
-            </button>
+            <Tooltip content={brakeEngaged ? "Disengage mechanical brake shoe to allow free rotation" : "Friction clamping brake to rapidly halt spindle rotation safely"} position="top" className="w-full">
+              <button
+                id="btn-brake-toggle"
+                onClick={toggleBrake}
+                className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs shadow-md transition duration-150 flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.98] ${
+                  brakeEngaged
+                    ? 'bg-amber-500/30 hover:bg-amber-500/40 text-amber-300 border border-amber-500/50 shadow-amber-500/20'
+                    : 'bg-slate-800/80 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-white/10 hover:border-amber-500/30'
+                }`}
+              >
+                <AlertCircle className={`w-4 h-4 ${brakeEngaged ? 'text-amber-400' : 'text-slate-400'}`} />
+                {brakeEngaged ? 'RELEASE SPINDLE BRAKE' : 'ENGAGE SPINDLE BRAKE'}
+              </button>
+            </Tooltip>
           </div>
 
           <div className="space-y-1.5">
@@ -192,32 +207,37 @@ export default function MachiningSimulator({
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                id="btn-jog-x-dec"
-                onMouseDown={() => handlePressStart('x', -0.1)}
-                onMouseUp={handlePressEnd}
-                onMouseLeave={handlePressEnd}
-                onTouchStart={() => handlePressStart('x', -0.1)}
-                onTouchEnd={handlePressEnd}
-                className="py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition text-emerald-400 text-xs font-bold rounded-xl flex items-center justify-center gap-1 cursor-pointer select-none shadow-sm"
-                title="Feed cutting tool IN (shaves stock diameter)"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                - IN (CUT)
-              </button>
-              <button
-                id="btn-jog-x-inc"
-                onMouseDown={() => handlePressStart('x', 0.1)}
-                onMouseUp={handlePressEnd}
-                onMouseLeave={handlePressEnd}
-                onTouchStart={() => handlePressStart('x', 0.1)}
-                onTouchEnd={handlePressEnd}
-                className="py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition text-slate-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1 cursor-pointer select-none shadow-sm"
-                title="Move cutting tool OUT (backs away from stock)"
-              >
-                OUT +
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <Tooltip content="Feed cutting tool inward towards center axis (shaves material off workpiece)" position="top" className="w-full">
+                <button
+                  id="btn-jog-x-dec"
+                  onMouseDown={() => handlePressStart('x', -0.1)}
+                  onMouseUp={handlePressEnd}
+                  onMouseLeave={handlePressEnd}
+                  onTouchStart={(e) => handleTouchStart(e, 'x', -0.1)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
+                  className="w-full py-3 sm:py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition text-emerald-400 text-xs font-bold rounded-xl flex items-center justify-center gap-1 cursor-pointer select-none shadow-sm touch-manipulation"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  - IN (CUT)
+                </button>
+              </Tooltip>
+
+              <Tooltip content="Retract cutting tool outward away from workpiece surface" position="top" className="w-full">
+                <button
+                  id="btn-jog-x-inc"
+                  onMouseDown={() => handlePressStart('x', 0.1)}
+                  onMouseUp={handlePressEnd}
+                  onMouseLeave={handlePressEnd}
+                  onTouchStart={(e) => handleTouchStart(e, 'x', 0.1)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
+                  className="w-full py-3 sm:py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition text-slate-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1 cursor-pointer select-none shadow-sm touch-manipulation"
+                >
+                  OUT +
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </Tooltip>
             </div>
           </div>
 
@@ -232,45 +252,51 @@ export default function MachiningSimulator({
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                id="btn-jog-z-dec"
-                onMouseDown={() => handlePressStart('z', -0.5)}
-                onMouseUp={handlePressEnd}
-                onMouseLeave={handlePressEnd}
-                onTouchStart={() => handlePressStart('z', -0.5)}
-                onTouchEnd={handlePressEnd}
-                className="py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition text-cyan-400 text-xs font-bold rounded-xl flex items-center justify-center gap-1 cursor-pointer select-none shadow-sm"
-                title="Feed cutting tool LEFT (towards chuck)"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                ← LEFT (CHUCK)
-              </button>
-              <button
-                id="btn-jog-z-inc"
-                onMouseDown={() => handlePressStart('z', 0.5)}
-                onMouseUp={handlePressEnd}
-                onMouseLeave={handlePressEnd}
-                onTouchStart={() => handlePressStart('z', 0.5)}
-                onTouchEnd={handlePressEnd}
-                className="py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition text-slate-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1 cursor-pointer select-none shadow-sm"
-                title="Move cutting tool RIGHT (towards tailstock)"
-              >
-                RIGHT →
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <Tooltip content="Traverse carriage left along bed toward headstock chuck" position="top" className="w-full">
+                <button
+                  id="btn-jog-z-dec"
+                  onMouseDown={() => handlePressStart('z', -0.5)}
+                  onMouseUp={handlePressEnd}
+                  onMouseLeave={handlePressEnd}
+                  onTouchStart={(e) => handleTouchStart(e, 'z', -0.5)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
+                  className="w-full py-3 sm:py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition text-cyan-400 text-xs font-bold rounded-xl flex items-center justify-center gap-1 cursor-pointer select-none shadow-sm touch-manipulation"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  ← LEFT (CHUCK)
+                </button>
+              </Tooltip>
+
+              <Tooltip content="Traverse carriage right along bed toward tailstock" position="top" className="w-full">
+                <button
+                  id="btn-jog-z-inc"
+                  onMouseDown={() => handlePressStart('z', 0.5)}
+                  onMouseUp={handlePressEnd}
+                  onMouseLeave={handlePressEnd}
+                  onTouchStart={(e) => handleTouchStart(e, 'z', 0.5)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchEnd}
+                  className="w-full py-3 sm:py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition text-slate-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1 cursor-pointer select-none shadow-sm touch-manipulation"
+                >
+                  RIGHT →
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </Tooltip>
             </div>
           </div>
 
           {/* Reload work block */}
-          <button
-            id="btn-refresh-workpiece"
-            onClick={resetWorkpiece}
-            className="w-full py-2.5 border border-white/10 hover:border-white/25 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] shadow-sm"
-            title="Replace the machined workpiece with a raw un-shaved cylinder"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Mount Raw Workpiece
-          </button>
+          <Tooltip content="Unclamp turned part and mount a fresh solid cylindrical metal workpiece" position="top" className="w-full">
+            <button
+              id="btn-refresh-workpiece"
+              onClick={resetWorkpiece}
+              className="w-full py-2.5 border border-white/10 hover:border-white/25 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition duration-150 flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] shadow-sm"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Mount Raw Workpiece
+            </button>
+          </Tooltip>
         </div>
 
         {/* Machining tip card */}

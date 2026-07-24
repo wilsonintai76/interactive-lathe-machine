@@ -1,5 +1,6 @@
 import { ToolPosition } from '../types';
 import { AlertCircle } from 'lucide-react';
+import Tooltip from './Tooltip';
 
 interface DigitalReadoutProps {
   toolPos: ToolPosition;
@@ -17,7 +18,7 @@ export default function DigitalReadout({
   return (
     <div
       id="dro-panel"
-      className="absolute top-4 right-4 bg-white/5 border border-white/10 backdrop-blur-md rounded-2xl p-4 w-64 sm:w-72 shadow-2xl z-10 select-none pointer-events-auto"
+      className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-slate-900/80 border border-white/10 backdrop-blur-md rounded-2xl p-2.5 sm:p-4 w-48 sm:w-72 shadow-2xl z-10 select-none pointer-events-auto"
     >
       <div className="flex items-center justify-between pb-2 mb-3 border-b border-white/10">
         <div className="flex items-center gap-2">
@@ -66,38 +67,42 @@ export default function DigitalReadout({
         )}
 
         {/* X Axis */}
-        <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 flex justify-between items-center shadow-inner">
-          <span className="text-[10px] text-emerald-400 font-bold tracking-wider">
-            X (DIAMETER)
-          </span>
-          <div className="text-right">
-            <span
-              id="dro-x-display"
-              className="text-xl font-bold text-emerald-400 tracking-tight transition-all duration-75"
-              style={{ textShadow: '0 0 8px rgba(52, 211, 153, 0.4)' }}
-            >
-              {toolPos.x.toFixed(2)}
+        <Tooltip content="X-Axis: Radial depth position from workpiece centerline (Controls cut depth/diameter)" position="left" className="w-full">
+          <div className="w-full bg-black/40 p-2.5 rounded-xl border border-white/5 flex justify-between items-center shadow-inner">
+            <span className="text-[10px] text-emerald-400 font-bold tracking-wider">
+              X (DIAMETER)
             </span>
-            <span className="text-[10px] text-slate-500 ml-1">mm</span>
+            <div className="text-right">
+              <span
+                id="dro-x-display"
+                className="text-xl font-bold text-emerald-400 tracking-tight transition-all duration-75"
+                style={{ textShadow: '0 0 8px rgba(52, 211, 153, 0.4)' }}
+              >
+                {toolPos.x.toFixed(2)}
+              </span>
+              <span className="text-[10px] text-slate-500 ml-1">mm</span>
+            </div>
           </div>
-        </div>
+        </Tooltip>
 
         {/* Z Axis */}
-        <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 flex justify-between items-center shadow-inner">
-          <span className="text-[10px] text-cyan-400 font-bold tracking-wider">
-            Z (POSITION)
-          </span>
-          <div className="text-right">
-            <span
-              id="dro-z-display"
-              className="text-xl font-bold text-cyan-400 tracking-tight transition-all duration-75"
-              style={{ textShadow: '0 0 8px rgba(34, 211, 238, 0.4)' }}
-            >
-              {toolPos.z.toFixed(2)}
+        <Tooltip content="Z-Axis: Longitudinal position along bed length from chuck face to tailstock" position="left" className="w-full">
+          <div className="w-full bg-black/40 p-2.5 rounded-xl border border-white/5 flex justify-between items-center shadow-inner">
+            <span className="text-[10px] text-cyan-400 font-bold tracking-wider">
+              Z (POSITION)
             </span>
-            <span className="text-[10px] text-slate-500 ml-1">mm</span>
+            <div className="text-right">
+              <span
+                id="dro-z-display"
+                className="text-xl font-bold text-cyan-400 tracking-tight transition-all duration-75"
+                style={{ textShadow: '0 0 8px rgba(34, 211, 238, 0.4)' }}
+              >
+                {toolPos.z.toFixed(2)}
+              </span>
+              <span className="text-[10px] text-slate-500 ml-1">mm</span>
+            </div>
           </div>
-        </div>
+        </Tooltip>
 
         {/* Telemetry Footer */}
         <div className="flex justify-between items-center px-1 text-[10px] text-slate-400 font-sans mt-1">

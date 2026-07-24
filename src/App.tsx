@@ -90,7 +90,7 @@ export default function App() {
       {/* Main Workspace Frame */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden relative z-10">
         {/* Left Side: 3D Visualization Canvas & DRO Dashboard */}
-        <div className="flex-1 relative bg-transparent flex flex-col min-h-[350px] md:min-h-0">
+        <div className="flex-1 relative bg-transparent flex flex-col min-h-[220px] sm:min-h-[300px] md:min-h-0">
           <LatheCanvas
             mode={mode}
             spindleRunning={spindleRunning}
@@ -106,13 +106,15 @@ export default function App() {
             resetCameraRef={resetCameraRef}
           />
 
-          {/* Overlaid Digital Readout (DRO) Panel */}
-          <DigitalReadout
-            toolPos={toolPos}
-            spindleRunning={spindleRunning}
-            brakeEngaged={brakeEngaged}
-            rpm={rpm}
-          />
+          {/* Overlaid Digital Readout (DRO) Panel - Shown only in machining simulation mode */}
+          {mode === 'operate' && (
+            <DigitalReadout
+              toolPos={toolPos}
+              spindleRunning={spindleRunning}
+              brakeEngaged={brakeEngaged}
+              rpm={rpm}
+            />
+          )}
 
           {/* Mouse Controls Hint Overlay */}
           <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md border border-white/10 px-3.5 py-2 rounded-xl text-[11px] text-slate-400 select-none shadow-lg pointer-events-none hidden sm:block">
@@ -127,7 +129,7 @@ export default function App() {
         {/* Right Side: Interactive Sidebar Panel */}
         <aside
           id="control-sidebar"
-          className="w-full md:w-96 bg-white/5 backdrop-blur-md border-t md:border-t-0 md:border-l border-white/10 flex flex-col shrink-0 min-h-0 overflow-hidden shadow-2xl z-10"
+          className="w-full md:w-96 bg-white/5 backdrop-blur-md border-t md:border-t-0 md:border-l border-white/10 flex flex-col shrink-0 min-h-0 overflow-hidden shadow-2xl z-10 max-h-[50vh] md:max-h-none"
         >
           {mode === 'inspect' ? (
             <AnatomyInspector

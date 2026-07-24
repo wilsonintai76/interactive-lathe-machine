@@ -1,5 +1,6 @@
 import { ANATOMY_PARTS } from '../data/anatomy';
 import { Info, ShieldAlert } from 'lucide-react';
+import Tooltip from './Tooltip';
 
 interface AnatomyInspectorProps {
   selectedPartKey: string;
@@ -39,27 +40,28 @@ export default function AnatomyInspector({
             {Object.entries(ANATOMY_PARTS).map(([key, part]) => {
               const isSelected = key === selectedPartKey;
               return (
-                <button
-                  key={key}
-                  id={`btn-part-${key}`}
-                  onClick={() => setSelectedPartKey(key)}
-                  className={`w-full text-left p-2.5 rounded-xl border text-xs transition duration-150 flex items-center justify-between cursor-pointer ${
-                    isSelected
-                      ? 'bg-white/15 border-white/20 text-white font-semibold shadow-inner'
-                      : 'bg-white/5 border-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10'
-                  }`}
-                >
-                  <span className="truncate">{part.title}</span>
-                  <span
-                    className={`text-[9px] font-mono px-2 py-0.5 rounded-full shrink-0 border ${
+                <Tooltip key={key} content={`Inspect ${part.title} mechanics & specifications`} position="left" className="w-full">
+                  <button
+                    id={`btn-part-${key}`}
+                    onClick={() => setSelectedPartKey(key)}
+                    className={`w-full text-left p-2.5 rounded-xl border text-xs transition duration-150 flex items-center justify-between cursor-pointer ${
                       isSelected
-                        ? 'bg-blue-500/20 text-blue-300 font-bold border-blue-500/30'
-                        : 'bg-white/5 text-slate-500 border-white/5'
+                        ? 'bg-white/15 border-white/20 text-white font-semibold shadow-inner'
+                        : 'bg-white/5 border-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10'
                     }`}
                   >
-                    {part.category}
-                  </span>
-                </button>
+                    <span className="truncate">{part.title}</span>
+                    <span
+                      className={`text-[9px] font-mono px-2 py-0.5 rounded-full shrink-0 border ${
+                        isSelected
+                          ? 'bg-blue-500/20 text-blue-300 font-bold border-blue-500/30'
+                          : 'bg-white/5 text-slate-500 border-white/5'
+                      }`}
+                    >
+                      {part.category}
+                    </span>
+                  </button>
+                </Tooltip>
               );
             })}
           </div>

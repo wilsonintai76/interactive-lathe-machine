@@ -139,8 +139,10 @@ export default function LatheCanvas({
   // Audio nodes refs
   const audioCtxRef = useRef<AudioContext | null>(null);
   const motorNodeRef = useRef<OscillatorNode | null>(null);
+  const motorGainRef = useRef<GainNode | null>(null);
   const noiseNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const cuttingGainRef = useRef<GainNode | null>(null);
+  const ambientGainRef = useRef<GainNode | null>(null);
 
   // Stable sync refs for animation loop
   const propsRef = useRef({ mode, spindleRunning, rpm, material, toolPos, selectedPartKey });
@@ -279,22 +281,23 @@ export default function LatheCanvas({
       // 1. Spindle Motor Hum (Oscillator)
       const motorOsc = ctx.createOscillator();
       motorOsc.type = 'sawtooth';
-      // Low motor frequency
-      motorOsc.frequency.value = 40 + (rpm / 2200) * 30;
+      motorOsc.frequency.value = 35 + (rpm / 2200) * 45;
 
       const motorGain = ctx.createGain();
-      motorGain.gain.value = 0.04;
+      motorGain.gain.value = spindleRunning ? 0.06 : 0.0;
 
-      // Filter to make it a deep, heavy hum
+      // Filter to make it a deep, heavy industrial machine hum
       const motorFilter = ctx.createBiquadFilter();
       motorFilter.type = 'lowpass';
-      motorFilter.frequency.value = 150;
+      motorFilter.frequency.value = 180;
 
       motorOsc.connect(motorFilter);
       motorFilter.connect(motorGain);
       motorGain.connect(ctx.destination);
       motorOsc.start();
+
       motorNodeRef.current = motorOsc;
+      motorGainRef.current = motorGain;
 
       // 2. Cutting Friction Screech (White Noise)
       const bufferSize = ctx.sampleRate * 2;
@@ -310,8 +313,8 @@ export default function LatheCanvas({
 
       const filter = ctx.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.frequency.value = 1300;
-      filter.Q.value = 2.0;
+      filter.frequency.value = 1400;
+      filter.Q.value = 2.2;
 
       const cutGain = ctx.createGain();
       cutGain.gain.value = 0;
@@ -323,6 +326,55 @@ export default function LatheCanvas({
 
       noiseNodeRef.current = noiseSource;
       cuttingGainRef.current = cutGain;
+
+      // 3. Ambient Machine Shop Background Sound (HVAC, ventilation rumble, sub line hum)
+      const ambGain = ctx.createGain();
+      ambGain.gain.value = (mode === 'operate') ? 0.035 : 0.0;
+
+      // Pink noise room rumble synthesis
+      const ambBufferSize = ctx.sampleRate * 3;
+      const ambBuffer = ctx.createBuffer(1, ambBufferSize, ctx.sampleRate);
+      const ambOutput = ambBuffer.getChannelData(0);
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+      for (let i = 0; i < ambBufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        b3 = 0.86650 * b3 + white * 0.3104856;
+        b4 = 0.55000 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.0168980;
+        ambOutput[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.03;
+        b6 = white * 0.115926;
+      }
+
+      const ambSource = ctx.createBufferSource();
+      ambSource.buffer = ambBuffer;
+      ambSource.loop = true;
+
+      const ambFilter = ctx.createBiquadFilter();
+      ambFilter.type = 'lowpass';
+      ambFilter.frequency.value = 220; // Deep reverberant shop floor cutoff
+
+      // 60Hz transformer line hum
+      const humOsc = ctx.createOscillator();
+      humOsc.type = 'sine';
+      humOsc.frequency.value = 60;
+
+      const humGain = ctx.createGain();
+      humGain.gain.value = 0.15;
+
+      humOsc.connect(humGain);
+      humGain.connect(ambFilter);
+
+      ambSource.connect(ambFilter);
+      ambFilter.connect(ambGain);
+      ambGain.connect(ctx.destination);
+
+      ambSource.start();
+      humOsc.start();
+
+      ambientGainRef.current = ambGain;
     } catch (e) {
       console.warn('Audio synthesis initialisation failed:', e);
     }
@@ -345,13 +397,31 @@ export default function LatheCanvas({
     }
   }, [audioEnabled]);
 
-  // Handle motor RPM changes in sound synthesizer
+  // Handle ambient machine shop background audio toggle depending on mode & audio setting
   useEffect(() => {
-    if (audioEnabled && motorNodeRef.current && audioCtxRef.current) {
-      const targetFreq = 40 + (rpm / 2200) * 40;
-      motorNodeRef.current.frequency.setTargetAtTime(targetFreq, audioCtxRef.current.currentTime, 0.1);
+    if (audioEnabled && audioCtxRef.current && ambientGainRef.current) {
+      const now = audioCtxRef.current.currentTime;
+      const targetGain = (mode === 'operate') ? 0.035 : 0.0;
+      ambientGainRef.current.gain.setTargetAtTime(targetGain, now, 0.15);
     }
-  }, [rpm, audioEnabled]);
+  }, [mode, audioEnabled]);
+
+  // Handle motor state (ON/OFF) and RPM changes in sound synthesizer
+  useEffect(() => {
+    if (audioEnabled && audioCtxRef.current) {
+      const now = audioCtxRef.current.currentTime;
+
+      if (motorGainRef.current) {
+        const targetGain = spindleRunning ? 0.06 : 0.0;
+        motorGainRef.current.gain.setTargetAtTime(targetGain, now, 0.08);
+      }
+
+      if (motorNodeRef.current) {
+        const targetFreq = 35 + (rpm / 2200) * 45;
+        motorNodeRef.current.frequency.setTargetAtTime(targetFreq, now, 0.08);
+      }
+    }
+  }, [spindleRunning, rpm, audioEnabled]);
 
   // Main canvas setup and animation loop
   useEffect(() => {
@@ -1330,15 +1400,15 @@ export default function LatheCanvas({
   }, []); // Rebuild tree ONLY once to preserve camera orientation and enable high-fidelity 60 FPS transitions
 
   return (
-    <div ref={containerRef} className="relative flex-1 w-full h-full bg-slate-950 overflow-hidden select-none">
+    <div ref={containerRef} className="relative flex-1 w-full h-full bg-slate-950 overflow-hidden select-none touch-none">
       {/* Three.js Canvas */}
       <canvas
         ref={canvasRef}
-        className="w-full h-full block cursor-grab active:cursor-grabbing outline-none"
+        className="w-full h-full block cursor-grab active:cursor-grabbing outline-none touch-none"
       />
 
       {/* Top Left Toolbar Controls */}
-      <div className="absolute top-4 left-4 z-20 flex items-center gap-2 flex-wrap max-w-[calc(100%-18rem)]">
+      <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-20 flex items-center gap-1.5 sm:gap-2 flex-wrap max-w-[calc(100%-13rem)] sm:max-w-[calc(100%-18rem)]">
         {isCuttingState && (
           <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-md flex items-center gap-2 select-none animate-pulse shadow-lg">
             <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
